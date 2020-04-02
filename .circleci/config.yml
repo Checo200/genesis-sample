@@ -106,8 +106,20 @@ workflows:
   version: 2
   lint:
     jobs:
-      - checkout
-      - standards
+      - checkout:
+          filters:
+            branches:
+              ignore:
+                - master
+                - staging
+      - standards:
+          requires:
+            - checkout
+          filters:
+            branches:
+              ignore:
+                - master
+                - staging
 
   deploy:
     jobs:
