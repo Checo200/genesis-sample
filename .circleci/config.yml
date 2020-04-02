@@ -115,12 +115,20 @@ workflows:
           filters:
             tags:
               only: /.*/
+            branches:
+              only:
+                - master
+                - staging
       - standards:
+          requires:
+            - checkout
           filters:
             tags:
               only: /.*/
-          requires:
-            - checkout
+            branches:
+              only:
+                - master
+                - staging
       - bundle:
           requires:
             - standards
