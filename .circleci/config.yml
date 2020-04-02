@@ -76,48 +76,40 @@ jobs:
           paths:
             - artifacts
 
+  deploy_staging:
+    executor: python
+    steps:
+      - attach_workspace:
+          at: /tmp
+      - run:
+          name: "Set S3_PATH env variable"
+          command: |
+            echo "export S3_PATH=$(grep 'textdomain' /tmp/theme/package.json | awk -F: '{print $2}' | sed 's/^\s//' | sed 's/\"//g')" >> ${BASH_ENV}
+      - aws-s3/sync:
+          from: "/tmp/artifacts/"
+          to: "s3://update.atomicblocks.com/themes/${S3_PATH}/"
+
   deploy_s3:
     executor: python
     steps:
       - attach_workspace:
           at: /tmp
+      - run:
+          name: "Set S3_PATH env variable"
+          command: |
+            echo "export S3_PATH=$(grep 'textdomain' /tmp/theme/package.json | awk -F: '{print $2}' | sed 's/^\s//' | sed 's/\"//g')" >> ${BASH_ENV}
       - aws-s3/sync:
           from: "/tmp/artifacts/"
           to: "s3://update.atomicblocks.com/themes/${S3_PATH}/"
 
-  deploy_sp_staging:
-    executor: python
-    steps:
-      - add_ssh_keys:
-          fingerprints:
-            - "f2:c5:53:4d:39:eb:ba:72:06:4d:fc:48:7c:5a:0f:df"
-      - attach_workspace:
-          at: /tmp
-      - run:
-          command: |
-            ARTIFACT_FILE=find /tmp/artifacts -type f -name *.zip -printf "%f\n"
-            DEST_PATH=home/wpe-user/sites/${STAGING_INSTALL_NAME}/wp-content/uploads/member-access/${ARTIFACT_FILE}
-            DEST_HOST=${STAGING_INSTALL_NAME}@${STAGING_INSTALL_NAME}.ssh.wpengine.net
-            scp /tmp/artifacts/${ARTIFACT_FILE} ${DEST_HOST}/${DEST_PATH}
-
-  deploy_sp_prod:
-    executor: python
-    steps:
-      - add_ssh_keys:
-          fingerprints:
-            - "f2:c5:53:4d:39:eb:ba:72:06:4d:fc:48:7c:5a:0f:df"
-      - attach_workspace:
-          at: /tmp
-      - run:
-          command: |
-            ARTIFACT_FILE=find /tmp/artifacts -type f -name *.zip -printf "%f\n"
-            DEST_PATH=home/wpe-user/sites/${PROD_INSTALL_NAME}/wp-content/uploads/member-access/${ARTIFACT_FILE}
-            DEST_HOST=${PROD_INSTALL_NAME}@${PROD_INSTALL_NAME}.ssh.wpengine.net
-            scp /tmp/artifacts/${ARTIFACT_FILE} ${DEST_HOST}/${DEST_PATH}
-
 workflows:
   version: 2
-  check-standards:
+  lint:
+    jobs:
+      - checkout
+      - standards
+
+  deploy:
     jobs:
       - checkout:
           filters:
@@ -136,7 +128,9 @@ workflows:
             tags:
               only: /.*/
             branches:
-              only: master
+              only:
+                - master
+                - staging
       - create_data_file:
           requires:
             - bundle
@@ -144,30 +138,25 @@ workflows:
             tags:
               only: /.*/
             branches:
-              only: master
+              only:
+                - master
+                - staging
+      - deploy_staging:
+          context: wpe-product-info-aws
+          requires:
+            - create_data_file
+          filters:
+            tags:
+              only: /.*/
+            branches:
+              only: staging
       - deploy_s3:
+          context: wpe-product-info-aws
           requires:
             - create_data_file
           filters:
             tags:
-              only: /.*/
-            branches:
-              only: master
-      - deploy_sp_staging:
-          requires:
-            - create_data_file
-          filters:
-            tags:
-              only: /.*/
-            branches:
-              only: master
-      - deploy_sp_prod:
-          requires:
-            - create_data_file
-            - deploy_sp_staging
-          filters:
-            tags:
-              only: /.*/
+              only: /^\d+\.\d+\.\d+$/
             branches:
               only: master
 
