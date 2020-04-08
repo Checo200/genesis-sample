@@ -189,7 +189,7 @@ workflows:
             branches:
               ignore: /.*/
       - deploy_studiopress:
-          install_name: myspress
+          sp_install: myspress
           requires:
             - create_data_file
           filters:
