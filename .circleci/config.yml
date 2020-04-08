@@ -76,18 +76,25 @@ jobs:
           paths:
             - artifacts
 
-  deploy_staging:
+  deploy_studiopress:
     executor: python
+    parameters:
+      install_name:
+        type: string
+        default: myspressstg
     steps:
+      - add_ssh_keys:
+          fingerprints:
+            - "f2:c5:53:4d:39:eb:ba:72:06:4d:fc:48:7c:5a:0f:df"
       - attach_workspace:
           at: /tmp
       - run:
-          name: "Set S3_PATH env variable"
           command: |
-            echo "export S3_PATH=$(grep 'textdomain' /tmp/theme/package.json | awk -F: '{print $2}' | sed 's/^\s//' | sed 's/\"//g')" >> ${BASH_ENV}
-      - aws-s3/sync:
-          from: "/tmp/artifacts/"
-          to: "s3://update.atomicblocks.com/themes/${S3_PATH}/"
+            ARTIFACT_FILE=$(find /tmp/artifacts -type f -name *.zip -printf "%f\n")
+            DEST_PATH=home/wpe-user/sites/<< parameters.install_name >>/wp-content/uploads/member-access/${ARTIFACT_FILE}
+            DEST_HOST=<< parameters.install_name >>@<< parameters.install_name >>.ssh.wpengine.net
+            scp /tmp/artifacts/${ARTIFACT_FILE} ${DEST_HOST}/${DEST_PATH}
+
 
   deploy_s3:
     executor: python
@@ -104,72 +111,94 @@ jobs:
 
 workflows:
   version: 2
-  lint:
+  checks:
     jobs:
       - checkout:
           filters:
             branches:
-              ignore:
-                - master
-                - staging
+              ignore: master
       - standards:
           requires:
             - checkout
           filters:
             branches:
-              ignore:
-                - master
-                - staging
+              ignore: master
 
-  deploy:
+  branch_deploy:
+    jobs:
+      - checkout:
+          filters:
+            branches:
+              only: master
+      - standards:
+          requires:
+            - checkout
+          filters:
+            branches:
+              only: master
+      - bundle:
+          requires:
+            - standards
+          filters:
+            branches:
+              only: master
+      - create_data_file:
+          requires:
+            - bundle
+          filters:
+            branches:
+              only: master
+      - deploy_studiopress:
+          name: deploy_sp_staging
+          install_name: myspressstg
+          context: wpe-product-info-aws
+          requires:
+            - create_data_file
+          filters:
+            branches:
+              only: master
+
+  tag_deploy:
     jobs:
       - checkout:
           filters:
             tags:
-              only: /.*/
+              only: /^\d+\.\d+\.\d+$/
             branches:
-              only:
-                - master
-                - staging
+              ignore: /.*/
       - standards:
           requires:
             - checkout
           filters:
             tags:
-              only: /.*/
+              only: /^\d+\.\d+\.\d+$/
             branches:
-              only:
-                - master
-                - staging
+              ignore: /.*/
       - bundle:
           requires:
             - standards
           filters:
             tags:
-              only: /.*/
+              only: /^\d+\.\d+\.\d+$/
             branches:
-              only:
-                - master
-                - staging
+              ignore: /.*/
       - create_data_file:
           requires:
             - bundle
           filters:
             tags:
-              only: /.*/
+              only: /^\d+\.\d+\.\d+$/
             branches:
-              only:
-                - master
-                - staging
-      - deploy_staging:
-          context: wpe-product-info-aws
+              ignore: /.*/
+      - deploy_studiopress:
+          install_name: myspress
           requires:
             - create_data_file
           filters:
             tags:
-              only: /.*/
+              only: /^\d+\.\d+\.\d+$/
             branches:
-              only: staging
+              ignore: /.*/
       - deploy_s3:
           context: wpe-product-info-aws
           requires:
@@ -178,7 +207,7 @@ workflows:
             tags:
               only: /^\d+\.\d+\.\d+$/
             branches:
-              only: master
+              ignore: /.*/
 
 orbs:
   aws-s3: circleci/aws-s3@1.0.0
