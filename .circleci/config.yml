@@ -79,7 +79,7 @@ jobs:
   deploy_studiopress:
     executor: python
     parameters:
-      install_name:
+      sp_install:
         type: string
         default: myspressstg
     steps:
@@ -91,8 +91,8 @@ jobs:
       - run:
           command: |
             ARTIFACT_FILE=$(find /tmp/artifacts -type f -name *.zip -printf "%f\n")
-            DEST_PATH=home/wpe-user/sites/<< parameters.install_name >>/wp-content/uploads/member-access/${ARTIFACT_FILE}
-            DEST_HOST=<< parameters.install_name >>@<< parameters.install_name >>.ssh.wpengine.net
+            DEST_PATH=home/wpe-user/sites/<< parameters.sp_install >>/wp-content/uploads/member-access/${ARTIFACT_FILE}
+            DEST_HOST=<< parameters.sp_install >>@<< parameters.sp_install >>.ssh.wpengine.net
             scp /tmp/artifacts/${ARTIFACT_FILE} ${DEST_HOST}/${DEST_PATH}
 
 
@@ -149,7 +149,7 @@ workflows:
             branches:
               only: master
       - deploy_studiopress:
-          install_name: myspressstg
+          sp_install: myspressstg
           requires:
             - create_data_file
           filters:
