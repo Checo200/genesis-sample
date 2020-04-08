@@ -149,9 +149,7 @@ workflows:
             branches:
               only: master
       - deploy_studiopress:
-          name: deploy_sp_staging
           install_name: myspressstg
-          context: wpe-product-info-aws
           requires:
             - create_data_file
           filters:
